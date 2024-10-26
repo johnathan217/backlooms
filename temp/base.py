@@ -3,7 +3,7 @@ from random import sample
 from typing import Optional, Tuple, List, Dict, Any
 import re
 
-from conversationGraph import ConversationGraph, Node, NodeType
+from src.graph.conversation_graph import ConversationGraph, Node, NodeType
 
 
 class ResponseGenerator(ABC):
@@ -121,16 +121,3 @@ class Agent(ABC):
             self.current_node_id = result
 
         self.context = self.graph.get_conversation_path(self.current_node_id)
-
-
-class RandomAgent(Agent):
-    def generate_decision(self, context: str) -> str:
-        import random
-        if random.choice([True, False]):
-            return "<choice>FOLLOW: 1</choice>"
-        return "<choice>NEW: Let's explore a new direction</choice>"
-
-
-class SimpleResponseGenerator(ResponseGenerator):
-    def get_response(self, context: List[Node], model_config: Dict[str, Any]) -> str:
-        return "Simple Response"
