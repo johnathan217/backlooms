@@ -22,6 +22,7 @@ class Agent(ABC):
         self.response_generator = response_generator
         self.current_node_id = None
         self.context = []
+        self.current_prompt_choices = []
         self.max_choices = 5
 
         self.logger.info("Agent started", extra={
@@ -31,7 +32,7 @@ class Agent(ABC):
         })
 
     @abstractmethod
-    def generate_decision(self, agent_context):
+    def generate_decision(self, choices) -> str:
         pass
 
     def _log_node_reached(self, node: Node):
@@ -50,6 +51,8 @@ class Agent(ABC):
         if len(prompt_nodes) > self.max_choices:
             prompt_nodes = sample(prompt_nodes, self.max_choices)
 
+        self.current_prompt_choices = prompt_nodes
+
         self.logger.info("Available choices", extra={
             'data': {
                 'num_choices': len(prompt_nodes),
@@ -59,35 +62,31 @@ class Agent(ABC):
 
         choices_text = "Available paths:\n"
         for idx, node in enumerate(prompt_nodes, 1):
-            response = self.graph.get_children(node.id)[0]
+            # response = self.graph.get_children(node.id)[0]
             choices_text += f"Path {idx}:\n"
-            choices_text += f"Prompt: {node.content}\n"
-            choices_text += f"Response: {response.content}\n\n"
-
-        choices_text += "\nTo follow a path, respond with your choice in tags like this:"
-        choices_text += "\n<choice>FOLLOW: <path number></choice>"
-        choices_text += "\n\nTo create a new path, respond with:"
-        choices_text += "\n<choice>NEW: <your prompt></choice>"
-        choices_text += "\n\nYou may include any additional explanation or reasoning outside the choice tags."
+            choices_text += f"Content: {node.content}\n"
+            # choices_text += f"Response: {response.content}\n\n"
 
         return choices_text
 
-    def start_journey(self, start_node_id: str, instructions: str) -> None:
+    def hop(self, start_node_id: str) -> str:
+        # Should travel one hop from start_node to a response node
         node = self.graph.get_node(start_node_id)
         if node.node_type == NodeType.PROMPT:
             raise ValueError("Agent cannot start on a prompt node")
 
-        self.logger.info("Starting journey", extra={
+        self.logger.info("Hopping", extra={
             'data': {
                 'start_node': start_node_id,
-                'instructions': instructions
             }
         })
 
         self.current_node_id = start_node_id
         self.context = self.graph.get_conversation_path(start_node_id)
         self._log_node_reached(node)
-        self._process_current_position(instructions)
+        self._process_current_position()
+
+        return self.current_node_id
 
     def _process_agent_decision(self, decision: str) -> Tuple[bool, Optional[str], Optional[str]]:
         choice_match = re.search(r'<choice>(.*?)</choice>', decision, re.DOTALL)
@@ -99,13 +98,7 @@ class Agent(ABC):
         if choice.startswith("FOLLOW:"):
             try:
                 path_num = int(choice.split(":")[1].strip())
-                children = self.graph.get_children(self.current_node_id)
-                prompt_nodes = [n for n in children if n.node_type == NodeType.PROMPT]
-
-                if len(prompt_nodes) > self.max_choices:
-                    prompt_nodes = sample(prompt_nodes, self.max_choices)
-
-                chosen_prompt = prompt_nodes[path_num - 1]
+                chosen_prompt = self.current_prompt_choices[path_num - 1]
                 response_node = self.graph.get_children(chosen_prompt.id)[0]
 
                 self.logger.info("Following existing path", extra={
@@ -139,15 +132,18 @@ class Agent(ABC):
 
         raise ValueError("Invalid choice format")
 
-    def _process_current_position(self, instructions: str) -> None:
-        choices = self._present_choices()
-        agent_context = (
-            f"Current context: {[node.content for node in self.context]}\n"
-            f"Instructions: {instructions}\n"
-            f"{choices}"
-        )
+    def _process_current_position(self) -> None:
 
-        decision = self.generate_decision(agent_context)
+        choices = self._present_choices()
+        # agent_context = (
+        #     f"Current context: {[node.content for node in self.context]}\n"
+        #     # f"Instructions: {instructions}\n"
+        #     f"{choices}"
+        # )
+
+        # Generate decision given: choices, self.context
+        decision = self.generate_decision(choices)
+
         is_new_path, result, _ = self._process_agent_decision(decision)
 
         if is_new_path:
@@ -187,7 +183,6 @@ class Agent(ABC):
             node = self.graph.get_node(result)
             self._log_node_reached(node)
 
-        self.context = self.graph.get_conversation_path(self.current_node_id)
         self.logger.info("Updated path", extra={
             'data': {
                 'path': [(node.node_type.name, node.id) for node in self.context]

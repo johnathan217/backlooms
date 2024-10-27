@@ -19,8 +19,7 @@ def main():
     id = "325a3db7-41d7-4f61-bab8-ddb9643bff12"
 
     agent = RandomAgent(graph, SimpleResponseGenerator())
-    agent.start_journey(id, "Explore Python list concepts")
-    id = agent.current_node_id
+    id = agent.hop(id)
     path = graph.get_conversation_path(id)
     print("\nConversation path:")
     for node in path:
