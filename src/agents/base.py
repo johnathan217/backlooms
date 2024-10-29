@@ -9,19 +9,23 @@ from src.graph.conversation_graph import ConversationGraph, Node, NodeType
 
 
 class ResponseGenerator(ABC):
+    def __init__(self, model_config: Dict[str, Any], system_prompt: str):
+        self.model_config = model_config
+        self.system_prompt = system_prompt
+
     @abstractmethod
-    def get_response(self, context: List[Node], model_config: Dict[str, Any]) -> str:
+    def get_response(self, prompt: str, context: List[Node]) -> str:
         pass
 
 
 class Agent(ABC):
-    def __init__(self, graph: ConversationGraph, response_generator: ResponseGenerator):
+    def __init__(self, graph: ConversationGraph, response_generator: ResponseGenerator, model_config: Dict[str, Any]):
+        self.model_config = model_config
         self.id = str(uuid.uuid4())[:8]
         self.logger = setup_agent_logger(self.id)
         self.graph = graph
         self.response_generator = response_generator
         self.current_node_id = None
-        self.context = []
         self.current_prompt_choices = []
         self.max_choices = 5
 
@@ -31,9 +35,33 @@ class Agent(ABC):
             }
         })
 
+    @property
+    def context(self) -> List[Node]:
+        if self.current_node_id is None:
+            return []
+        return self.graph.get_conversation_path(self.current_node_id)
+
     @abstractmethod
     def generate_decision(self, choices) -> str:
         pass
+
+    def hop(self, start_node_id: str) -> str:
+        # Should travel one hop from start_node to a response node
+        node = self.graph.get_node(start_node_id)
+        if node.node_type == NodeType.PROMPT:
+            raise ValueError("Agent cannot start on a prompt node")
+
+        self.logger.info("Hopping", extra={
+            'data': {
+                'start_node': start_node_id,
+            }
+        })
+
+        self.current_node_id = start_node_id
+        self._log_node_reached(node)
+        self._process_current_position()
+
+        return self.current_node_id
 
     def _log_node_reached(self, node: Node):
         self.logger.info("At node", extra={
@@ -60,7 +88,7 @@ class Agent(ABC):
             }
         })
 
-        choices_text = "Available paths:\n"
+        choices_text = ""
         for idx, node in enumerate(prompt_nodes, 1):
             # response = self.graph.get_children(node.id)[0]
             choices_text += f"Path {idx}:\n"
@@ -68,25 +96,6 @@ class Agent(ABC):
             # choices_text += f"Response: {response.content}\n\n"
 
         return choices_text
-
-    def hop(self, start_node_id: str) -> str:
-        # Should travel one hop from start_node to a response node
-        node = self.graph.get_node(start_node_id)
-        if node.node_type == NodeType.PROMPT:
-            raise ValueError("Agent cannot start on a prompt node")
-
-        self.logger.info("Hopping", extra={
-            'data': {
-                'start_node': start_node_id,
-            }
-        })
-
-        self.current_node_id = start_node_id
-        self.context = self.graph.get_conversation_path(start_node_id)
-        self._log_node_reached(node)
-        self._process_current_position()
-
-        return self.current_node_id
 
     def _process_agent_decision(self, decision: str) -> Tuple[bool, Optional[str], Optional[str]]:
         choice_match = re.search(r'<choice>(.*?)</choice>', decision, re.DOTALL)
@@ -135,14 +144,15 @@ class Agent(ABC):
     def _process_current_position(self) -> None:
 
         choices = self._present_choices()
-        # agent_context = (
-        #     f"Current context: {[node.content for node in self.context]}\n"
-        #     # f"Instructions: {instructions}\n"
-        #     f"{choices}"
-        # )
 
         # Generate decision given: choices, self.context
         decision = self.generate_decision(choices)
+
+        self.logger.info("AI output", extra={
+            'data': {
+                'content': decision,
+            }
+        })
 
         is_new_path, result, _ = self._process_agent_decision(decision)
 
@@ -150,17 +160,16 @@ class Agent(ABC):
             prompt_id = self.graph.add_node(
                 content=result,
                 node_type=NodeType.PROMPT,
-                parent_id=self.current_node_id
+                parent_id=self.current_node_id,
+                model_config=self.model_config
             )
-            prompt_node = self.graph.get_node(prompt_id)
 
-            context = self.graph.get_conversation_path(prompt_id)
-            root_node = context[0]
             response = self.response_generator.get_response(
-                context,
-                root_node.model_config
+                result,
+                self.context
             )
 
+            # TODO add model details/ config to node metadata
             response_id = self.graph.add_node(
                 content=response,
                 node_type=NodeType.RESPONSE,

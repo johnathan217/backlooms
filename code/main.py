@@ -1,4 +1,5 @@
 # src/main.py
+from src.agents.basic_agent import BasicAgent
 from src.graph.conversation_graph import ConversationGraph, NodeType
 from src.agents.simple_agents import RandomAgent, SimpleResponseGenerator
 from src.config.config import MYSQL_CONFIG
@@ -18,7 +19,7 @@ def main():
 
     id = "325a3db7-41d7-4f61-bab8-ddb9643bff12"
 
-    agent = RandomAgent(graph, SimpleResponseGenerator())
+    agent = BasicAgent(graph, SimpleResponseGenerator(), "system prompt")
     id = agent.hop(id)
     path = graph.get_conversation_path(id)
     print("\nConversation path:")
