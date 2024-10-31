@@ -47,6 +47,8 @@ class Agent(ABC):
 
     def hop(self, start_node_id: str) -> str:
         # Should travel one hop from start_node to a response node
+        self.graph.validate_tree()
+
         node = self.graph.get_node(start_node_id)
         if node.node_type == NodeType.PROMPT:
             raise ValueError("Agent cannot start on a prompt node")
@@ -173,7 +175,8 @@ class Agent(ABC):
             response_id = self.graph.add_node(
                 content=response,
                 node_type=NodeType.RESPONSE,
-                parent_id=prompt_id
+                parent_id=prompt_id,
+                model_config=self.response_generator.model_config
             )
             response_node = self.graph.get_node(response_id)
 

@@ -70,8 +70,7 @@ class ConversationGraph:
         finally:
             session.close()
 
-    def add_node(self, content: str, node_type: NodeType,
-                 parent_id: str,
+    def add_node(self, content: str, node_type: NodeType, parent_id: str,
                  model_config: Optional[Dict[str, Any]] = None) -> str:
         try:
             self.validate_node_addition(parent_id, node_type)

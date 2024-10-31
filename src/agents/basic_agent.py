@@ -1,11 +1,15 @@
 from abc import ABC
 from typing import List, Dict, Any
 
+from dotenv import load_dotenv
+import os
 import anthropic
 from src.agents.base import Agent, ResponseGenerator
-from src.graph.conversation_graph import ConversationGraph, Node
+from src.graph.conversation_graph import ConversationGraph, Node, NodeType
 
-key = ""
+load_dotenv()
+
+key = os.getenv('ANTHROPIC_API_KEY')
 
 
 class BasicResponseGenerator(ResponseGenerator, ABC):
@@ -20,21 +24,38 @@ class BasicResponseGenerator(ResponseGenerator, ABC):
     def get_response(self, prompt: str, context: List[Node]) -> str:
         client = anthropic.Anthropic(api_key=key)
 
+        messages = []
+        system_message = None
+
+        for node in context:
+            if node.node_type == NodeType.SYSTEM:
+                system_message = node.content
+                continue
+
+            role = {
+                NodeType.PROMPT: "user",
+                NodeType.RESPONSE: "assistant"
+            }[node.node_type]
+
+            messages.append({
+                "role": role,
+                "content": [{"type": "text", "text": node.content}]
+            })
+
+        messages.append({
+            "role": "user",
+            "content": [{"type": "text", "text": prompt}]
+        })
+
         message = client.messages.create(
             model=self.model_config.get("model"),
             max_tokens=1000,
             temperature=self.model_config.get("temperature"),
-            system=self.system_prompt,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [{"type": "text", "text": prompt}]
-                }
-            ]
+            system=system_message,
+            messages=messages
         )
 
         return message.content[0].text
-
 
 
 class BasicAgent(Agent, ABC):
