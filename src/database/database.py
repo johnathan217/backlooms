@@ -1,10 +1,12 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Text, Index
+from sqlalchemy import create_engine, Column, String, DateTime, Text, Index, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.dialects.mysql import ENUM, JSON
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 import uuid
+
+from src.graph.conversation_graph import Node, NodeType
 
 Base = declarative_base()
 
@@ -108,37 +110,47 @@ class MySQLConversationGraph:
         finally:
             session.close()
 
-    def get_conversation_path(self, node_id: str) -> List[Dict]:
-        query = """
-        WITH RECURSIVE path_cte AS (
-            SELECT id, content, node_type, model_config, timestamp, parent_id, 1 as level
-            FROM conversation_nodes
-            WHERE id = :node_id
+    def get_conversation_path(self, node_id: str) -> List[Node]:
+        recursive_query = text("""
+            WITH RECURSIVE path_cte AS (
+                SELECT *, 1 as level 
+                FROM conversation_nodes 
+                WHERE id = :node_id
 
-            UNION ALL
+                UNION ALL
 
-            SELECT n.id, n.content, n.node_type, n.model_config, n.timestamp, n.parent_id, p.level + 1
-            FROM conversation_nodes n
-            INNER JOIN path_cte p ON n.id = p.parent_id
-        )
-        SELECT * FROM path_cte
-        ORDER BY level DESC;
-        """
+                SELECT n.*, p.level + 1
+                FROM conversation_nodes n
+                INNER JOIN path_cte p ON n.id = p.parent_id
+            )
+            SELECT * FROM path_cte
+            ORDER BY level DESC;
+        """)
 
         session = self.Session()
         try:
-            result = session.execute(query, {'node_id': node_id})
-            path = []
+            result = session.execute(recursive_query, {'node_id': node_id})
+            nodes = []
             for row in result:
-                path.append({
-                    'id': row.id,
-                    'content': row.content,
-                    'node_type': row.node_type,
-                    'model_config': row.model_config,
-                    'timestamp': row.timestamp.isoformat(),
-                    'parent_id': row.parent_id
-                })
-            return path
+                # Parse model_config if it's a string
+                model_config = row.model_config
+                if isinstance(model_config, str):
+                    try:
+                        import json
+                        model_config = json.loads(model_config)
+                    except (json.JSONDecodeError, TypeError):
+                        model_config = {"model": "unknown"}
+
+                node = Node(
+                    id=row.id,
+                    content=row.content,
+                    node_type=NodeType(row.node_type),
+                    model_config=model_config,
+                    timestamp=row.timestamp,
+                    parent_id=row.parent_id
+                )
+                nodes.append(node)
+            return nodes
         finally:
             session.close()
 

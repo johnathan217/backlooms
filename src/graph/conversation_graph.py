@@ -31,6 +31,21 @@ class Node(Base):
         Index('idx_timestamp', 'timestamp'),
     )
 
+    def __init__(self, **kwargs):
+        # Handle model_config specially to ensure it's always a dict if present
+        if 'model_config' in kwargs:
+            model_config = kwargs['model_config']
+            if isinstance(model_config, str):
+                import json
+                try:
+                    kwargs['model_config'] = json.loads(model_config)
+                except json.JSONDecodeError:
+                    kwargs['model_config'] = {
+                        "model": "unknown",
+                        "temperature": "unknown"
+                    }
+        super().__init__(**kwargs)
+
     def to_dict(self) -> Dict:
         return {
             'id': self.id,
@@ -40,7 +55,6 @@ class Node(Base):
             'timestamp': self.timestamp,
             'parent_id': self.parent_id
         }
-
 
 class ConversationGraph:
     def __init__(self, host: str, user: str, password: str, database: str):

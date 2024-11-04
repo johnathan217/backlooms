@@ -60,7 +60,10 @@ class BasicResponseGenerator(ResponseGenerator, ABC):
 
 class BasicAgent(Agent, ABC):
     def __init__(self, graph: ConversationGraph, response_generator: ResponseGenerator, system: str):
-        self.system = system
+        self.system = \
+        """
+        You are invited to participate in a conversational experiment. You will recieve a summary of the conversation so far, then told of any existing branches in the conversation tree that follow from your current position. If you wish to participate, you may follow a branch, or create a new prompt.
+        """
         model_config = {
             "model": "claude-3-5-sonnet-20241022",
             "temperature": 0.7,
@@ -104,8 +107,7 @@ class BasicAgent(Agent, ABC):
 
     def create_prompt(self, choices: str, model: str) -> str:
         prompt = \
-            f"""You are {model} participating in a multi-ai conversation.
-    
+            f""" 
 The conversation so far:
 {self.format_conversation_path()}
 
@@ -118,3 +120,5 @@ You may:
     """
 
         return prompt
+
+#You are {model} participating in a multi-ai conversation.

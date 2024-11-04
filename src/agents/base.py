@@ -47,32 +47,27 @@ class Agent(ABC):
 
     def hop(self, start_node_id: str) -> str:
         # Should travel one hop from start_node to a response node
+
         self.graph.validate_tree()
 
         node = self.graph.get_node(start_node_id)
         if node.node_type == NodeType.PROMPT:
             raise ValueError("Agent cannot start on a prompt node")
 
-        self.logger.info("Hopping", extra={
+        self.logger.info("==================== HOP ====================")
+        self.logger.info("At node", extra={
             'data': {
-                'start_node': start_node_id,
+                'node_type': node.node_type.name,
+                'id': node.id,
+                'content': node.content
             }
         })
 
         self.current_node_id = start_node_id
-        self._log_node_reached(node)
+
         self._process_current_position()
 
         return self.current_node_id
-
-    def _log_node_reached(self, node: Node):
-        self.logger.info("At node", extra={
-            'data': {
-                'node_type': node.node_type.name,
-                'node_id': node.id,
-                'content': node.content[:100] + '...' if len(node.content) > 100 else node.content
-            }
-        })
 
     def _present_choices(self) -> str:
         children = self.graph.get_children(self.current_node_id)
@@ -115,7 +110,7 @@ class Agent(ABC):
                 self.logger.info("Following existing path", extra={
                     'data': {
                         'choice': choice,
-                        'prompt_id': chosen_prompt.id,
+                        'id': chosen_prompt.id,
                         'prompt': chosen_prompt.content,
                         'response_id': response_node.id
                     }
@@ -147,16 +142,15 @@ class Agent(ABC):
 
         choices = self._present_choices()
 
-        # Generate decision given: choices, self.context
-        decision = self.generate_decision(choices)
+        output = self.generate_decision(choices)
 
         self.logger.info("AI output", extra={
             'data': {
-                'content': decision,
+                'content': output,
             }
         })
 
-        is_new_path, result, _ = self._process_agent_decision(decision)
+        is_new_path, result, _ = self._process_agent_decision(output)
 
         if is_new_path:
             prompt_id = self.graph.add_node(
@@ -171,41 +165,24 @@ class Agent(ABC):
                 self.context
             )
 
-            # TODO add model details/ config to node metadata
             response_id = self.graph.add_node(
                 content=response,
                 node_type=NodeType.RESPONSE,
                 parent_id=prompt_id,
                 model_config=self.response_generator.model_config
             )
-            response_node = self.graph.get_node(response_id)
-
-            self.logger.info("Generated response", extra={
-                'data': {
-                    'prompt_id': prompt_id,
-                    'response_id': response_id,
-                    'response': response[:100] + '...' if len(response) > 100 else response
-                }
-            })
 
             self.current_node_id = response_id
-            self._log_node_reached(response_node)
+
         else:
             self.current_node_id = result
-            node = self.graph.get_node(result)
-            self._log_node_reached(node)
-
-        self.logger.info("Updated path", extra={
-            'data': {
-                'path': [(node.node_type.name, node.id) for node in self.context]
-            }
-        })
 
     def __del__(self):
         if hasattr(self, 'logger'):
             self.logger.info("Agent finished", extra={
                 'data': {
-                    'agent_id': self.id
+                    'agent_id': self.id,
+                    'path': [(node.node_type.name, node.id) for node in self.context]
                 }
             })
             for handler in self.logger.handlers[:]:
