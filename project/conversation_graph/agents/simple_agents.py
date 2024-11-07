@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 import random
-from src.agents.base import Agent, ResponseGenerator
-from src.graph.conversation_graph import Node
+from project.agents.base import Agent, ResponseGenerator
+from project.graph.conversation_graph import Node
 
 
 class RandomAgent(Agent):

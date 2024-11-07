@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.database.database import Base
+from project.database.database import Base
 
 
 def setup_database(host="localhost", user="root", password="", database="conversation_graph"):

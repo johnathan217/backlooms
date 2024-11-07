@@ -1,7 +1,7 @@
-from src.agents.basic_agent import BasicAgent, BasicResponseGenerator
-from src.graph.conversation_graph import ConversationGraph, NodeType
-from src.agents.simple_agents import RandomAgent, SimpleResponseGenerator
-from src.config.config import MYSQL_CONFIG
+from project.agents.basic_agent import BasicAgent, BasicResponseGenerator
+from project.graph.conversation_graph import ConversationGraph, NodeType
+from project.agents.simple_agents import RandomAgent, SimpleResponseGenerator
+from project.config.config import MYSQL_CONFIG
 
 
 def main():

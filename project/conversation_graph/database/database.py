@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 import uuid
 
-from src.graph.conversation_graph import Node, NodeType
+from project.graph.conversation_graph import Node, NodeType
 
 Base = declarative_base()
 
