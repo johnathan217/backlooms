@@ -1,32 +1,28 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from project.conversation_graph.config import MYSQL_CONFIG
 from project.conversation_graph.graph.conversation_graph import ConversationGraph, NodeType
-from project.web.api.database import get_graph
 
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
+
+graph = ConversationGraph(**MYSQL_CONFIG)
 
 
 @app.get("/api/nodes/{node_id}")
-async def get_node_and_children(
-        node_id: str,
-        graph: ConversationGraph = Depends(get_graph)
-):
+async def get_node_and_children(node_id: str):
     try:
         node = graph.get_node(node_id)
         if not node:
             raise HTTPException(status_code=404, detail="Node not found")
-
         children = graph.get_children(node_id)
-
         return {
             **node.to_dict(),
             "has_children": len(children) > 0,
@@ -44,13 +40,15 @@ async def get_node_and_children(
 
 
 @app.get("/api/roots")
-async def get_root_nodes(
-    graph: ConversationGraph = Depends(get_graph)
-):
-
-    nodes = graph.get_children(None)
+async def get_root_nodes():
     return [
         node.to_dict()
-        for node in nodes
+        for node in graph.get_children(None)
         if node.node_type == NodeType.SYSTEM
     ]
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

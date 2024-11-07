@@ -1,7 +1,6 @@
-from project.agents.basic_agent import BasicAgent, BasicResponseGenerator
-from project.graph.conversation_graph import ConversationGraph, NodeType
-from project.agents.simple_agents import RandomAgent, SimpleResponseGenerator
-from project.config.config import MYSQL_CONFIG
+from project.conversation_graph.agents.basic_agent import BasicAgent, BasicResponseGenerator
+from project.conversation_graph.config import MYSQL_CONFIG
+from project.conversation_graph.graph.conversation_graph import ConversationGraph
 
 
 def main():
@@ -20,7 +19,7 @@ def main():
 
     agent = BasicAgent(graph, BasicResponseGenerator(), "system")
 
-    for i in range(0, 7):
+    for i in range(0, 3):
         id = agent.hop(id)
 
     path = graph.get_conversation_path(id)
