@@ -29,7 +29,7 @@ def setup_agent_logger(agent_id: str) -> logging.Logger:
 
     if not logger.handlers:
         # Single log file with all events
-        log_file = logs_dir / f"agent_{agent_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_file = logs_dir / f"agent_{agent_id}_{datetime.now().strftime('%Y,%m,%d_%H,%M,%S')}.log"
         handler = logging.FileHandler(log_file)
         handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)

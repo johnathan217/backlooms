@@ -1,4 +1,3 @@
-# src/main.py
 from src.agents.basic_agent import BasicAgent, BasicResponseGenerator
 from src.graph.conversation_graph import ConversationGraph, NodeType
 from src.agents.simple_agents import RandomAgent, SimpleResponseGenerator
@@ -21,7 +20,7 @@ def main():
 
     agent = BasicAgent(graph, BasicResponseGenerator(), "system")
 
-    for i in range(0, 5):
+    for i in range(0, 7):
         id = agent.hop(id)
 
     path = graph.get_conversation_path(id)
