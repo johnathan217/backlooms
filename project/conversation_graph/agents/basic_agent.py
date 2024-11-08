@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import os
 import anthropic
 
+from project.conversation_graph.agents.base import ResponseGenerator, Agent
+from project.conversation_graph.graph.conversation_graph import Node, NodeType, ConversationGraph
 
 load_dotenv()
 
@@ -60,7 +62,7 @@ class BasicResponseGenerator(ResponseGenerator, ABC):
 class BasicAgent(Agent, ABC):
     def __init__(self, graph: ConversationGraph, response_generator: ResponseGenerator, system: str):
         self.system = \
-        """
+            """
         You are invited to participate in a conversational experiment. You will recieve a summary of the conversation so far, then told of any existing branches in the conversation tree that follow from your current position. If you wish to participate, you may follow a branch, or create a new prompt.
         """
         model_config = {
@@ -120,4 +122,4 @@ You may:
 
         return prompt
 
-#You are {model} participating in a multi-ai conversation.
+# You are {model} participating in a multi-ai conversation.

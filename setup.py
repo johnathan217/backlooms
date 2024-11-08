@@ -5,6 +5,12 @@ setup(
     version="0.1",
     packages=find_packages(),
     install_requires=[
-        # TODO add dependencies
+        "anthropic",
+        "fastapi",
+        "sqlalchemy",
+        "setuptools",
+        "python-dotenv",
+        "mysql-connector-python",
+        "uvicorn"
     ]
 )

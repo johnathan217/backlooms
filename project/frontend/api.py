@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from project.conversation_graph.config import MYSQL_CONFIG
-from project.conversation_graph.graph.conversation_graph import ConversationGraph, NodeType
+from ..conversation_graph.config import MYSQL_CONFIG
+from ..conversation_graph.graph.conversation_graph import ConversationGraph, NodeType
 
 app = FastAPI()
 app.add_middleware(

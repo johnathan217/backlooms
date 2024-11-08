@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from random import sample
 from typing import Optional, Tuple, List, Dict, Any
 
-from project.agents.agent_logger import setup_agent_logger
-from project.graph.conversation_graph import ConversationGraph, Node, NodeType
+from project.conversation_graph.agents.agent_logger import setup_agent_logger
+from project.conversation_graph.graph.conversation_graph import ConversationGraph, Node, NodeType
 
 
 class ResponseGenerator(ABC):
