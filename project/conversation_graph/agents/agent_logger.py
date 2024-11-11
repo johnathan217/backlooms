@@ -12,7 +12,6 @@ class JsonFormatter(logging.Formatter):
             "event": record.getMessage()
         }
 
-        # Include extra data if provided
         if hasattr(record, 'data'):
             log_data.update(record.data)
 
@@ -28,8 +27,7 @@ def setup_agent_logger(agent_id: str) -> logging.Logger:
     logger.setLevel(logging.INFO)
 
     if not logger.handlers:
-        # Single log file with all events
-        log_file = logs_dir / f"agent_{agent_id}_{datetime.now().strftime('%Y,%m,%d_%H,%M,%S')}.log"
+        log_file = logs_dir / f"agent_{agent_id}_{datetime.now().strftime('%d,%m,%Y_%H,%M,%S')}.log"
         handler = logging.FileHandler(log_file)
         handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Node } from './types';
+import HyperbolicTree from './components/HyperbolicTree';
 
-// Types
 interface Node {
     id: string;
     content: string;
@@ -10,61 +9,47 @@ interface Node {
     timestamp: string;
     parent_id: string | null;
     has_children: boolean;
-    children?: Node[];
+    children?: Node[] | null;
 }
 
-// API functions
-const api = {
-    fetchNode: async (nodeId: string): Promise<Node> => {
-        const response = await fetch(`http://localhost:8000/api/nodes/${nodeId}`);
-        if (!response.ok) throw new Error('Failed to fetch node');
-        return response.json();
-    },
-
-    fetchRoots: async (): Promise<Node[]> => {
-        const response = await fetch('http://localhost:8000/api/roots');
-        if (!response.ok) throw new Error('Failed to fetch roots');
-        return response.json();
-    }
-};
-
-// Main component
 function App() {
-    const [nodes, setNodes] = useState<Node[]>([]);
-    const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+    const [rootNode, setRootNode] = useState<Node | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        api.fetchRoots()
-            .then(setNodes)
-            .finally(() => setLoading(false));
+        const fetchRoot = async () => {
+            try {
+                setLoading(true);
+                const response = await fetch('http://localhost:8000/api/roots');
+                if (!response.ok) throw new Error('Failed to fetch roots');
+                const roots = await response.json();
+
+                if (roots.length > 0) {
+                    const nodeResponse = await fetch(`http://localhost:8000/api/nodes/${roots[0].id}`);
+                    if (!nodeResponse.ok) throw new Error('Failed to fetch root node');
+                    const nodeData = await nodeResponse.json();
+                    setRootNode(nodeData);
+                } else {
+                    setError('No root nodes found');
+                }
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'An error occurred');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRoot();
     }, []);
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    if (error) return <div className="min-h-screen flex items-center justify-center text-red-500">{error}</div>;
+    if (!rootNode) return <div className="min-h-screen flex items-center justify-center">No data available</div>;
 
     return (
-        <div className="container mx-auto p-4">
-            <div className="flex gap-4">
-                {/* Tree View - Ready for visualization enhancement */}
-                <div className="w-2/3 border rounded p-4">
-                    <h2 className="text-xl mb-4">Conversation Tree</h2>
-                    {/* This is where you'll add your visualization */}
-                    <pre>{JSON.stringify(nodes, null, 2)}</pre>
-                </div>
-
-                {/* Details Panel */}
-                <div className="w-1/3 border rounded p-4">
-                    <h2 className="text-xl mb-4">Node Details</h2>
-                    {selectedNode ? (
-                        <div>
-                            <h3>{selectedNode.node_type}</h3>
-                            <p>{selectedNode.content}</p>
-                        </div>
-                    ) : (
-                        <p>Select a node to view details</p>
-                    )}
-                </div>
-            </div>
+        <div className="min-h-screen p-4">
+            <HyperbolicTree rootNode={rootNode} />
         </div>
     );
 }
