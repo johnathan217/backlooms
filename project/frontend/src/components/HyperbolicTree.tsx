@@ -36,13 +36,20 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
             const response = await fetch(`http://localhost:8000/api/nodes/${nodeId}`);
             if (!response.ok) throw new Error('Failed to fetch node');
             const data = await response.json();
-            console.log('Fetched data for node:', nodeId, data);
 
             const newNodes: Record<string, Node> = { [nodeId]: data };
             if (data.children) {
                 data.children.forEach((child: Node) => {
                     newNodes[child.id] = child;
                 });
+
+                const responseChildren = data.children.filter(child => child.node_type === 'RESPONSE');
+                await Promise.all(responseChildren.map(async child => {
+                    if (child.has_children && !expandedNodes.has(child.id)) {
+                        const childData = await fetchNode(child.id);
+                        Object.assign(newNodes, { [child.id]: childData });
+                    }
+                }));
             }
 
             setNodesData(prev => ({...prev, ...newNodes}));
@@ -64,10 +71,43 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
         if (rootNode.children) {
             rootNode.children.forEach(child => {
                 initialNodes[child.id] = child;
+
+                if (child.node_type === 'RESPONSE' && child.has_children) {
+                    setExpandedNodes(prev => new Set([...prev, child.id]));
+                    fetchNode(child.id);
+                }
             });
         }
         setNodesData(initialNodes);
     }, [rootNode]);
+
+    const handleNodeClick = async (nodeId: string, nodeData: Node) => {
+        if (nodeData.has_children) {
+            const newExpanded = new Set(expandedNodes);
+
+            if (expandedNodes.has(nodeId)) {
+                newExpanded.delete(nodeId);
+                const descendantIds = getAllDescendantIds(nodeId, nodesData);
+                descendantIds.forEach(id => newExpanded.delete(id));
+            } else {
+                newExpanded.add(nodeId);
+
+                const currentNode = nodesData[nodeId];
+                if (!currentNode?.children) {
+                    const data = await fetchNode(nodeId);
+
+                    data.children?.forEach(child => {
+                        if (child.node_type === 'RESPONSE' && child.has_children) {
+                            newExpanded.add(child.id);
+                            fetchNode(child.id);
+                        }
+                    });
+                }
+            }
+
+            setExpandedNodes(newExpanded);
+        }
+    };
 
     useEffect(() => {
         if (!svgRef.current) return;
@@ -87,7 +127,7 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
                 children: []
             };
 
-            if (expandedNodes.has(node.id) && node.children) {
+            if ((expandedNodes.has(node.id) || node.node_type === 'RESPONSE') && node.children) {
                 result.children = node.children
                     .filter(child => child)
                     .map(child => processData(child.id))
@@ -137,28 +177,7 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
             .style("cursor", (d: any) => d.data.nodeData.has_children ? "pointer" : "default")
             .on("click", async (event: any, d: any) => {
                 event.stopPropagation();
-                const nodeId = d.data.nodeData.id;
-
-                if (d.data.nodeData.has_children) {
-                    const newExpanded = new Set(expandedNodes);
-
-                    if (expandedNodes.has(nodeId)) {
-                        console.log('Collapsing node:', nodeId);
-                        newExpanded.delete(nodeId);
-                        const descendantIds = getAllDescendantIds(nodeId, nodesData);
-                        descendantIds.forEach(id => newExpanded.delete(id));
-                    } else {
-                        console.log('Expanding node:', nodeId);
-                        newExpanded.add(nodeId);
-
-                        const currentNode = nodesData[nodeId];
-                        if (!currentNode?.children) {
-                            await fetchNode(nodeId);
-                        }
-                    }
-
-                    setExpandedNodes(newExpanded);
-                }
+                await handleNodeClick(d.data.nodeData.id, d.data.nodeData);
             });
 
         nodes.append("circle")
@@ -167,7 +186,7 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
             .style("stroke", "#fff")
             .style("stroke-width", 1.5);
 
-        nodes.filter((d: any) => d.data.nodeData.has_children)
+        nodes.filter((d: any) => d.data.nodeData.has_children && d.data.nodeData.node_type !== 'RESPONSE')
             .append("text")
             .attr("dy", "0.3em")
             .attr("text-anchor", "middle")
