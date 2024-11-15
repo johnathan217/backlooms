@@ -1,57 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
+import { useNodeStore } from '../nodeStore';
+import { Node } from '../types';
 
-interface Node {
-    id: string;
-    content: string;
-    node_type: 'SYSTEM' | 'PROMPT' | 'RESPONSE';
-    model_config: Record<string, any>;
-    timestamp: string;
-    parent_id: string | null;
-    has_children: boolean;
-    children?: Node[] | null;
-}
-
-interface HyperbolicTreeProps {
-    rootNode: Node;
-}
-
-const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
+export const HyperbolicTree: React.FC = () => {
     const svgRef = useRef<SVGSVGElement>(null);
-    const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
     const currentTransformRef = useRef(d3.zoomIdentity);
-    const [nodesData, setNodesData] = useState<Record<string, Node>>({});
-
-    const getAllDescendantIds = (nodeId: string, nodes: Record<string, Node>): string[] => {
-        const node = nodes[nodeId];
-        if (!node?.children) return [];
-
-        const childIds = node.children.map(child => child.id);
-        const descendantIds = childIds.flatMap(childId => getAllDescendantIds(childId, nodes));
-        return [...childIds, ...descendantIds];
-    };
-
-    const fetchNode = async (nodeId: string) => {
-        try {
-            const response = await fetch(`http://localhost:8000/api/nodes/${nodeId}`);
-            if (!response.ok) throw new Error('Failed to fetch node');
-            const data = await response.json();
-            console.log('Fetched data for node:', nodeId, data);
-
-            const newNodes: Record<string, Node> = { [nodeId]: data };
-            if (data.children) {
-                data.children.forEach((child: Node) => {
-                    newNodes[child.id] = child;
-                });
-            }
-
-            setNodesData(prev => ({...prev, ...newNodes}));
-            return data;
-        } catch (error) {
-            console.error('Error fetching node:', error);
-            throw error;
-        }
-    };
+    const { nodesData, selectedNodeId, expandedNodes, handleNodeClick } = useNodeStore();
 
     const nodeColors: Record<Node['node_type'], string> = {
         'SYSTEM': '#ff4444',
@@ -59,46 +14,52 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
         'RESPONSE': '#44ff44'
     };
 
-    useEffect(() => {
-        const initialNodes: Record<string, Node> = { [rootNode.id]: rootNode };
-        if (rootNode.children) {
-            rootNode.children.forEach(child => {
-                initialNodes[child.id] = child;
-            });
-        }
-        setNodesData(initialNodes);
-    }, [rootNode]);
+    const processData = (nodeId: string) => {
+        const node = nodesData[nodeId];
+        if (!node) return null;
+
+        return {
+            name: node.id,
+            nodeData: node,
+            children: expandedNodes.has(node.id) && node.children
+                ? node.children
+                    .map(child => processData(child.id))
+                    .filter(Boolean)
+                : []
+        };
+    };
+
+    // Find the maximum depth in the tree
+    const findMaxDepth = (root: d3.HierarchyNode<any>): number => {
+        let maxDepth = root.depth;
+        root.each(node => {
+            maxDepth = Math.max(maxDepth, node.depth);
+        });
+        return maxDepth;
+    };
+
+    // Helper function to determine if a node should show text
+    const shouldShowText = (d: any, maxDepth: number) => {
+        // Show text for nodes that are at maxDepth, maxDepth-1, or maxDepth-2
+        return d.depth >= maxDepth - 2;
+    };
 
     useEffect(() => {
+        console.log('Tree effect triggered:', {
+            nodesCount: Object.keys(nodesData).length,
+            expandedNodesCount: expandedNodes.size,
+            selectedNodeId
+        });
+
         if (!svgRef.current) return;
+
+        const rootNodeId = Object.keys(nodesData)[0];
+        if (!rootNodeId) return;
 
         const width = 800;
         const height = 600;
         const centerX = width / 2;
         const centerY = height / 2;
-
-        const processData = (nodeId: string) => {
-            const node = nodesData[nodeId];
-            if (!node) return null;
-
-            const result: any = {
-                name: node.id,
-                nodeData: node,
-                children: []
-            };
-
-            if (expandedNodes.has(node.id) && node.children) {
-                result.children = node.children
-                    .filter(child => child)
-                    .map(child => processData(child.id))
-                    .filter(child => child !== null);
-            }
-
-            return result;
-        };
-
-        const hierarchyData = processData(rootNode.id);
-        if (!hierarchyData) return;
 
         d3.select(svgRef.current).selectAll("*").remove();
 
@@ -113,7 +74,17 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
             .size([2 * Math.PI, Math.min(width, height) / 3])
             .separation((a: any, b: any) => (a.parent === b.parent ? 1 : 2) / a.depth);
 
+        const hierarchyData = processData(rootNodeId);
+        if (!hierarchyData) return;
+
         const root = tree(d3.hierarchy(hierarchyData));
+        const maxDepth = findMaxDepth(root);
+
+        console.log('Tree depths:', {
+            maxDepth,
+            nodeCount: root.descendants().length,
+            nodesWithText: root.descendants().filter(d => shouldShowText(d, maxDepth)).length
+        });
 
         const links = g.selectAll(".link")
             .data(root.links())
@@ -131,41 +102,21 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
             .data(root.descendants())
             .join("g")
             .attr("class", "node")
-            .attr("transform", (d: any) => `
-                translate(${d.y * Math.sin(d.x)},${-d.y * Math.cos(d.x)})
-            `)
-            .style("cursor", (d: any) => d.data.nodeData.has_children ? "pointer" : "default")
-            .on("click", async (event: any, d: any) => {
+            .attr("transform", (d: any) =>
+                `translate(${d.y * Math.sin(d.x)},${-d.y * Math.cos(d.x)})`)
+            .style("cursor", "pointer")
+            .on("click", (event: any, d: any) => {
                 event.stopPropagation();
-                const nodeId = d.data.nodeData.id;
-
-                if (d.data.nodeData.has_children) {
-                    const newExpanded = new Set(expandedNodes);
-
-                    if (expandedNodes.has(nodeId)) {
-                        console.log('Collapsing node:', nodeId);
-                        newExpanded.delete(nodeId);
-                        const descendantIds = getAllDescendantIds(nodeId, nodesData);
-                        descendantIds.forEach(id => newExpanded.delete(id));
-                    } else {
-                        console.log('Expanding node:', nodeId);
-                        newExpanded.add(nodeId);
-
-                        const currentNode = nodesData[nodeId];
-                        if (!currentNode?.children) {
-                            await fetchNode(nodeId);
-                        }
-                    }
-
-                    setExpandedNodes(newExpanded);
-                }
+                handleNodeClick(d.data.nodeData.id);
             });
 
         nodes.append("circle")
             .attr("r", (d: any) => Math.max(25 / (d.depth + 1), 4))
             .style("fill", (d: any) => nodeColors[d.data.nodeData.node_type])
-            .style("stroke", "#fff")
-            .style("stroke-width", 1.5);
+            .style("stroke", (d: any) =>
+                d.data.nodeData.id === selectedNodeId ? "#000" : "#fff")
+            .style("stroke-width", (d: any) =>
+                d.data.nodeData.id === selectedNodeId ? 2 : 1.5);
 
         nodes.filter((d: any) => d.data.nodeData.has_children)
             .append("text")
@@ -175,11 +126,12 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
             .style("fill", "white")
             .text((d: any) => expandedNodes.has(d.data.nodeData.id) ? "-" : "+");
 
-        const truncateText = (text: string, maxLength: number = 30) => {
-            return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
-        };
+        const truncateText = (text: string) =>
+            text.length > 30 ? text.substring(0, 30) + "..." : text;
 
-        nodes.append("text")
+        // Only add text labels to nodes near the maximum depth
+        nodes.filter((d: any) => shouldShowText(d, maxDepth))
+            .append("text")
             .attr("dy", "0.35em")
             .attr("x", (d: any) => d.children ? -8 : 8)
             .attr("text-anchor", (d: any) => d.children ? "end" : "start")
@@ -198,16 +150,12 @@ const HyperbolicTree: React.FC<HyperbolicTreeProps> = ({ rootNode }) => {
 
         svg.call(zoom as any);
 
-    }, [expandedNodes, nodesData, rootNode]);
+    }, [nodesData, expandedNodes, selectedNodeId]);
 
     return (
-        <div className="w-full h-full flex justify-center items-center">
-            <svg
-                ref={svgRef}
-                className="border rounded-lg shadow-lg bg-white"
-            />
-        </div>
+        <svg
+            ref={svgRef}
+            className="w-full h-full border rounded-lg shadow-lg bg-white"
+        />
     );
 };
-
-export default HyperbolicTree;

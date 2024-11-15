@@ -22,7 +22,10 @@ async def get_node_and_children(node_id: str):
         node = graph.get_node(node_id)
         if not node:
             raise HTTPException(status_code=404, detail="Node not found")
+
         children = graph.get_children(node_id)
+        siblings = graph.get_siblings(node_id)
+
         return {
             **node.to_dict(),
             "has_children": len(children) > 0,
@@ -33,7 +36,8 @@ async def get_node_and_children(node_id: str):
                     "children": None
                 }
                 for child in children
-            ]
+            ],
+            "siblings": [sibling.to_dict() for sibling in siblings]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

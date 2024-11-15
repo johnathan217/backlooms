@@ -1,55 +1,44 @@
-import React, { useEffect, useState } from 'react';
-import HyperbolicTree from './components/HyperbolicTree';
+import React, { useEffect } from 'react';
+import { HyperbolicTree } from './components/HyperbolicTree';
+import { ConversationPanel } from './components/ConversationPanel';
+import { useNodeStore } from './nodeStore';
+import { api } from './api';
 
-interface Node {
-    id: string;
-    content: string;
-    node_type: 'SYSTEM' | 'PROMPT' | 'RESPONSE';
-    model_config: Record<string, any>;
-    timestamp: string;
-    parent_id: string | null;
-    has_children: boolean;
-    children?: Node[] | null;
-}
-
-function App() {
-    const [rootNode, setRootNode] = useState<Node | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+export function App() {
+    const { addNodes, selectNode, selectedPath, hoveredPath } = useNodeStore();
 
     useEffect(() => {
-        const fetchRoot = async () => {
+        const initializeApp = async () => {
             try {
-                setLoading(true);
-                const response = await fetch('http://localhost:8000/api/roots');
-                if (!response.ok) throw new Error('Failed to fetch roots');
-                const roots = await response.json();
-
+                const roots = await api.fetchRoots();
                 if (roots.length > 0) {
-                    const nodeResponse = await fetch(`http://localhost:8000/api/nodes/${roots[0].id}`);
-                    if (!nodeResponse.ok) throw new Error('Failed to fetch root node');
-                    const nodeData = await nodeResponse.json();
-                    setRootNode(nodeData);
-                } else {
-                    setError('No root nodes found');
+                    const rootData = await api.fetchNode(roots[0].id);
+                    addNodes({ [rootData.id]: rootData });
+                    await selectNode(rootData.id);
                 }
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'An error occurred');
-            } finally {
-                setLoading(false);
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
             }
         };
 
-        fetchRoot();
+        initializeApp();
     }, []);
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-    if (error) return <div className="min-h-screen flex items-center justify-center text-red-500">{error}</div>;
-    if (!rootNode) return <div className="min-h-screen flex items-center justify-center">No data available</div>;
-
     return (
-        <div className="min-h-screen p-4">
-            <HyperbolicTree rootNode={rootNode} />
+        <div className="flex h-screen overflow-hidden">
+            <div className="w-2/3 h-full p-4 flex items-center justify-center bg-gray-50">
+                <HyperbolicTree />
+            </div>
+            <div className="w-1/3 h-screen flex flex-col border-l border-gray-200">
+                <div className="p-4 border-b border-gray-200 bg-white">
+                    <h2 className="text-xl font-bold">Conversation Path</h2>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                    <ConversationPanel
+                        path={hoveredPath.length > 0 ? hoveredPath : selectedPath}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
