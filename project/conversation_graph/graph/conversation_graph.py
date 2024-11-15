@@ -153,6 +153,19 @@ class ConversationGraph:
             [session.expunge(node) for node in nodes]
             return nodes
 
+    def get_siblings(self, node_id: str) -> List[Node]:
+        with self.get_session() as session:
+            node = session.query(Node).filter(Node.id == node_id).first()
+            if not node or not node.parent_id:
+                return []
+
+            siblings = session.query(Node).filter(
+                Node.parent_id == node.parent_id,
+                Node.id != node_id
+            ).all()
+
+            [session.expunge(sibling) for sibling in siblings]
+            return siblings
 
     def get_leaf_nodes(self) -> List[Node]:
         leaf_query = text("""

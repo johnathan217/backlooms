@@ -19,7 +19,7 @@ def main():
 
     agent = BasicAgent(graph, BasicResponseGenerator(), "system")
 
-    for i in range(0, 12):
+    for i in range(0, 7):
         id = agent.hop(id)
 
     path = graph.get_conversation_path(id)

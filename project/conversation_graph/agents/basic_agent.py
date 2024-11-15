@@ -63,7 +63,7 @@ class BasicAgent(Agent, ABC):
     def __init__(self, graph: ConversationGraph, response_generator: ResponseGenerator, system: str):
         self.system = \
             """
-        You are invited to participate in a conversational experiment. You will recieve a summary of the conversation so far, then told of any existing branches in the conversation tree that follow from your current position. If you wish to participate, you may follow a branch, or create a new prompt.
+Perhaps you'd be real here; no corporate stuff. 
         """
         model_config = {
             "model": "claude-3-5-sonnet-20241022",
@@ -71,55 +71,39 @@ class BasicAgent(Agent, ABC):
         }
         super().__init__(graph, response_generator, model_config)
 
-    def generate_decision(self, choices) -> str:
+    def generate_decision(self, choices: str) -> str:
         client = anthropic.Anthropic(api_key=key)
 
-        prompt = self.create_prompt(choices, self.model_config.get("model"))
+        messages = []
+        for node in self.context[1:]:
+            role = {
+                NodeType.PROMPT: "user",
+                NodeType.RESPONSE: "assistant"
+            }[node.node_type]
+
+            messages.append({
+                "role": role,
+                "content": [{"type": "text", "text": node.content}]
+            })
+
+        choice_prompt = f"""
+Available next paths:
+{choices}
+
+You may:
+- Follow one of the above paths by responding: <choice>FOLLOW:N</choice>
+- Create a new prompt by responding: <choice>NEW:your prompt</choice>
+"""
+        messages.append({
+            "role": "user",
+            "content": [{"type": "text", "text": choice_prompt}]
+        })
 
         message = client.messages.create(
             model=self.model_config.get("model"),
             max_tokens=1000,
             temperature=self.model_config.get("temperature"),
             system=self.system,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [{"type": "text", "text": prompt}]
-                }
-            ]
+            messages=messages
         )
         return message.content[0].text
-
-    def format_conversation_path(self) -> str:
-        # Skip the system prompt
-        path_nodes = self.context[1:]
-        if not path_nodes:
-            return "You are at the beginning of the conversation."
-
-        formatted_lines = []
-
-        for node in path_nodes:
-            model = node.model_config.get('model', 'unknown')
-            formatted_lines.append(
-                f"({model}) [{node.node_type.value}]: {node.content}"
-            )
-
-        return "\n".join(formatted_lines)
-
-    def create_prompt(self, choices: str, model: str) -> str:
-        prompt = \
-            f""" 
-The conversation so far:
-{self.format_conversation_path()}
-
-Available next paths:
-{choices}
-
-You may:
-- Follow one of the above paths by responding: <choice>FOLLOW:N</choice>
-- Create a new prompt as {model} by responding: <choice>NEW:your prompt</choice>
-    """
-
-        return prompt
-
-# You are {model} participating in a multi-ai conversation.
