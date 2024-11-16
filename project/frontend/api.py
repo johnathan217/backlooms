@@ -52,6 +52,15 @@ async def get_root_nodes():
     ]
 
 
+@app.get("/api/nodes/{node_id}/descendants/count")
+async def get_descendant_count(node_id: str):
+    try:
+        count = graph.count_descendants(node_id)
+        return {"count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
 

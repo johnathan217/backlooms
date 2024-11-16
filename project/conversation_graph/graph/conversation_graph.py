@@ -289,3 +289,27 @@ class ConversationGraph:
                 )
 
             return True
+
+    def count_descendants(self, node_id: str) -> int:
+        recursive_query = text("""
+            WITH RECURSIVE descendants_cte AS (
+                -- Base case: direct children
+                SELECT id
+                FROM conversation_nodes 
+                WHERE parent_id = :node_id
+
+                UNION ALL
+
+                -- Recursive case: children of children
+                SELECT n.id
+                FROM conversation_nodes n
+                INNER JOIN descendants_cte d ON n.parent_id = d.id
+            )
+            SELECT COUNT(*) as count
+            FROM descendants_cte;
+        """)
+
+        with self.get_session() as session:
+            result = session.execute(recursive_query, {'node_id': node_id})
+            return result.scalar() or 0
+

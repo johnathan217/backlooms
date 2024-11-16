@@ -22,5 +22,12 @@ export const api = {
         }
 
         return path;
+    },
+
+    async fetchDescendantCount(nodeId: string): Promise<number> {
+        const response = await fetch(`http://localhost:8000/api/nodes/${nodeId}/descendants/count`);
+        if (!response.ok) throw new Error('Failed to fetch descendant count');
+        const data = await response.json();
+        return data.count;
     }
 };

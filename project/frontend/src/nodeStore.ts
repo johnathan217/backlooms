@@ -55,7 +55,6 @@ export const useNodeStore = create<NodeStore>((set: SetState<NodeStore>, get: Ge
         const newExpanded = new Set(state.expandedNodes);
 
         if (newExpanded.has(nodeId)) {
-            // Collapse logic
             const getAllDescendants = (node: Node): string[] => {
                 if (!node.children) return [];
                 const childIds = node.children.map(child => child.id);
@@ -75,10 +74,8 @@ export const useNodeStore = create<NodeStore>((set: SetState<NodeStore>, get: Ge
                 remainingExpanded: Array.from(newExpanded)
             });
         } else {
-            // Expand logic
             newExpanded.add(nodeId);
 
-            // Only fetch if we don't have the node's data or its children's data
             const needToFetch = node.has_children && (
                 !node.children ||
                 !node.children.every(child => state.nodesData[child.id])
@@ -87,16 +84,12 @@ export const useNodeStore = create<NodeStore>((set: SetState<NodeStore>, get: Ge
             if (needToFetch) {
                 console.log('Fetching node data:', { nodeId });
                 try {
-                    // Fetch the parent node
                     const nodeData = await api.fetchNode(nodeId);
 
-                    // Create a record of nodes to add to the store
                     const nodesToAdd: Record<string, Node> = {
                         [nodeId]: nodeData
                     };
 
-                    // Add all children from the response to our store
-                    // They come with the parent node's response
                     if (nodeData.children) {
                         nodeData.children.forEach(child => {
                             nodesToAdd[child.id] = child;
@@ -148,11 +141,9 @@ export const useNodeStore = create<NodeStore>((set: SetState<NodeStore>, get: Ge
                 path: path.map(n => n.id)
             });
 
-            // Add all nodes from the path to our store
             const nodesToAdd: Record<string, Node> = {};
             path.forEach(node => {
                 nodesToAdd[node.id] = node;
-                // Also add any children that came with the node
                 if (node.children) {
                     node.children.forEach(child => {
                         nodesToAdd[child.id] = child;

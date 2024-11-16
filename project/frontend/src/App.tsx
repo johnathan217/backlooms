@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { HyperbolicTree } from './components/HyperbolicTree';
+import { Tree } from './components/Tree.tsx';
 import { ConversationPanel } from './components/ConversationPanel';
 import { useNodeStore } from './nodeStore';
 import { api } from './api';
@@ -27,7 +27,7 @@ export function App() {
     return (
         <div className="flex h-screen overflow-hidden">
             <div className="w-2/3 h-full p-4 flex items-center justify-center bg-gray-50">
-                <HyperbolicTree />
+                <Tree />
             </div>
             <div className="w-1/3 h-screen flex flex-col border-l border-gray-200">
                 <div className="p-4 border-b border-gray-200 bg-white">

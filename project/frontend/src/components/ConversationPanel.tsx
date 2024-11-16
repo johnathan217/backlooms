@@ -59,7 +59,6 @@ export const ConversationPanel: React.FC<ConversationPanelProps> = ({ path }) =>
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [path, nodesData, expandedNodes]);
 
-    // Add effect to handle scrolling when path changes
     useEffect(() => {
         if (selectedNodeRef.current) {
             selectedNodeRef.current.scrollIntoView({

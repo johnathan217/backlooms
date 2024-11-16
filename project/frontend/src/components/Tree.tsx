@@ -1,12 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { useNodeStore } from '../nodeStore';
 import { Node } from '../types';
+import { api } from '../api';
 
-export const HyperbolicTree: React.FC = () => {
+export const Tree: React.FC = () => {
     const svgRef = useRef<SVGSVGElement>(null);
     const currentTransformRef = useRef(d3.zoomIdentity);
     const { nodesData, selectedNodeId, expandedNodes, handleNodeClick } = useNodeStore();
+    const [descendantCounts, setDescendantCounts] = useState<Record<string, number>>({});
 
     const nodeColors: Record<Node['node_type'], string> = {
         'SYSTEM': '#ff4444',
@@ -14,13 +16,30 @@ export const HyperbolicTree: React.FC = () => {
         'RESPONSE': '#44ff44'
     };
 
+    const fetchDescendantCount = async (nodeId: string) => {
+        if (descendantCounts[nodeId] === undefined) {
+            try {
+                const count = await api.fetchDescendantCount(nodeId);
+                setDescendantCounts(prev => ({
+                    ...prev,
+                    [nodeId]: count
+                }));
+            } catch (error) {
+                console.error('Failed to fetch descendant count:', nodeId, error);
+            }
+        }
+    };
+
     const processData = (nodeId: string) => {
         const node = nodesData[nodeId];
         if (!node) return null;
 
+        fetchDescendantCount(nodeId);
+
         return {
             name: node.id,
             nodeData: node,
+            totalDescendants: descendantCounts[nodeId] ?? 1,
             children: expandedNodes.has(node.id) && node.children
                 ? node.children
                     .map(child => processData(child.id))
@@ -29,7 +48,6 @@ export const HyperbolicTree: React.FC = () => {
         };
     };
 
-    // Find the maximum depth in the tree
     const findMaxDepth = (root: d3.HierarchyNode<any>): number => {
         let maxDepth = root.depth;
         root.each(node => {
@@ -38,10 +56,19 @@ export const HyperbolicTree: React.FC = () => {
         return maxDepth;
     };
 
-    // Helper function to determine if a node should show text
     const shouldShowText = (d: any, maxDepth: number) => {
-        // Show text for nodes that are at maxDepth, maxDepth-1, or maxDepth-2
         return d.depth >= maxDepth - 2;
+    };
+
+    const calculateStrokeWidth = (d: any) => {
+        const minWidth = 0.5;
+        const maxWidth = 8;
+        const descendantCount = d.target.data.totalDescendants;
+
+        const width = Math.log2(descendantCount + 1) * 1.5;
+        const depthScale = Math.max(0.3, 1 - (d.target.depth * 0.15));
+
+        return Math.max(minWidth, Math.min(maxWidth, width * depthScale));
     };
 
     useEffect(() => {
@@ -80,11 +107,18 @@ export const HyperbolicTree: React.FC = () => {
         const root = tree(d3.hierarchy(hierarchyData));
         const maxDepth = findMaxDepth(root);
 
-        console.log('Tree depths:', {
-            maxDepth,
-            nodeCount: root.descendants().length,
-            nodesWithText: root.descendants().filter(d => shouldShowText(d, maxDepth)).length
-        });
+        const gradient = svg.append("defs")
+            .append("linearGradient")
+            .attr("id", "branch-gradient")
+            .attr("gradientUnits", "userSpaceOnUse");
+
+        gradient.append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", "#666");
+
+        gradient.append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", "#999");
 
         const links = g.selectAll(".link")
             .data(root.links())
@@ -94,9 +128,12 @@ export const HyperbolicTree: React.FC = () => {
                 .angle((d: any) => d.x)
                 .radius((d: any) => d.y))
             .style("fill", "none")
-            .style("stroke", "#999")
+            .style("stroke", "url(#branch-gradient)")
             .style("stroke-opacity", 0.6)
-            .style("stroke-width", (d: any) => Math.max(3 - d.target.depth * 0.5, 0.5));
+            .style("stroke-width", calculateStrokeWidth)
+            .style("stroke-linecap", "round")
+            .append("title")
+            .text((d: any) => `${d.target.data.totalDescendants} descendants`);
 
         const nodes = g.selectAll(".node")
             .data(root.descendants())
@@ -129,7 +166,6 @@ export const HyperbolicTree: React.FC = () => {
         const truncateText = (text: string) =>
             text.length > 30 ? text.substring(0, 30) + "..." : text;
 
-        // Only add text labels to nodes near the maximum depth
         nodes.filter((d: any) => shouldShowText(d, maxDepth))
             .append("text")
             .attr("dy", "0.35em")
@@ -150,7 +186,7 @@ export const HyperbolicTree: React.FC = () => {
 
         svg.call(zoom as any);
 
-    }, [nodesData, expandedNodes, selectedNodeId]);
+    }, [nodesData, expandedNodes, selectedNodeId, descendantCounts]);
 
     return (
         <svg
